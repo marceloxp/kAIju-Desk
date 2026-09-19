@@ -1,4 +1,4 @@
-![kAIju-Desk](images/banner.jpeg)
+![kAIju-Desk](images/banner-v2.jpg)
 
 # kAIju-Desk
 
