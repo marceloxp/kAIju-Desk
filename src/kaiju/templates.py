@@ -32,7 +32,9 @@ def backlog_md() -> str:
     return (
         "# Backlog\n"
         "\n"
-        "> Findings that haven't become cards yet. One line per finding. Rules: `kaiju guide`.\n"
+        "> Findings that are not cards yet. Rules: `kaiju guide`.\n"
+        "\n"
+        "## Open\n"
         "\n"
         "## Dropped\n"
     )
