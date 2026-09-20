@@ -270,6 +270,59 @@ def test_import_path_points_at_kaiju_package():
     assert any((Path(root) / "kaiju").is_dir() for root in roots)
 
 
+def test_desired_nav_sash_restores_collapsed_pane():
+    from kaiju.gui.app import NAV_SASH, desired_nav_sash
+
+    assert desired_nav_sash(4, 1100) == NAV_SASH
+    assert desired_nav_sash(0, 1100) == NAV_SASH
+    assert desired_nav_sash(NAV_SASH, 1100) is None
+    assert desired_nav_sash(180, 1100) is None
+    assert desired_nav_sash(4, 1) is None
+
+
+def test_desired_files_sash_restores_collapsed_pane():
+    from kaiju.gui.app import FILES_SASH, desired_files_sash
+
+    assert desired_files_sash(1090, 1100) == 1100 - FILES_SASH
+    assert desired_files_sash(860, 1100) is None
+    assert desired_files_sash(0, 1) is None
+
+
+def test_grid_with_yscroll_keeps_scrollbar_when_parent_shrinks():
+    import tkinter as tk
+    from tkinter import ttk
+
+    import pytest
+
+    from kaiju.gui.app import _grid_with_yscroll
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no display")
+    root.geometry("300x200+40+40")
+    try:
+        frame = ttk.Frame(root, width=220, height=160)
+        frame.grid_propagate(False)
+        frame.pack()
+        tree = ttk.Treeview(frame, show="tree")
+        for index in range(40):
+            tree.insert("", "end", text=f"row {index}")
+        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        _grid_with_yscroll(frame, tree, scroll)
+        root.update_idletasks()
+        root.update()
+        frame.configure(width=50, height=50)
+        root.update_idletasks()
+        root.update()
+        assert scroll.winfo_width() >= 8
+        assert scroll.winfo_height() >= 8
+        assert tree.winfo_width() >= 8
+    finally:
+        root.destroy()
+
+
 def _flatten_names(nodes) -> set[str]:
     names: set[str] = set()
     for node in nodes:

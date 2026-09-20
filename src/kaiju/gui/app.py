@@ -32,6 +32,29 @@ from kaiju.gui.session import (
     table_values,
 )
 
+# ttk.Panedwindow has no minsize. sashpos before the first real layout is lost.
+NAV_SASH = 220
+NAV_SASH_MIN = 140
+FILES_SASH = 220
+FILES_SASH_MIN = 140
+
+
+def desired_nav_sash(current: int, pane_width: int) -> int | None:
+    """Return the nav sash x to apply when the pane has collapsed."""
+    if pane_width < 50 or current >= NAV_SASH_MIN:
+        return None
+    return NAV_SASH
+
+
+def desired_files_sash(current: int, pane_width: int) -> int | None:
+    """Return the files sash x to apply when the pane has collapsed."""
+    if pane_width < 50:
+        return None
+    files_width = pane_width - current
+    if files_width >= FILES_SASH_MIN:
+        return None
+    return max(200, pane_width - FILES_SASH)
+
 
 def run_app(start: Path) -> None:
     try:
@@ -53,6 +76,12 @@ class App:
         self._extra: tuple[tk.Misc, ScrolledText] | None = None
         self._busy = False
         self._file_nodes: dict[str, FileNode] = {}
+        self._placing_nav = False
+        self._placing_files = False
+        self._nav_sash_wait = 0
+        self._files_sash_wait = 0
+        self._nav_sash_ready = False
+        self._files_sash_ready = False
         self._build()
         self._open_path(start, warn=False)
 
@@ -69,7 +98,7 @@ class App:
         self.empty_body = ttk.Frame(self.root, padding=24)
         self._build_empty()
 
-        nav_frame = ttk.Frame(self.outer, padding=4)
+        nav_frame = ttk.Frame(self.outer, padding=4, width=NAV_SASH)
         right = ttk.Panedwindow(self.outer, orient=tk.VERTICAL)
         self.outer.add(nav_frame, weight=0)
         self.outer.add(right, weight=1)
@@ -81,11 +110,10 @@ class App:
             selectmode="browse",
             displaycolumns=(),
         )
-        self.nav.column("#0", stretch=True)
+        self.nav.column("#0", stretch=True, minwidth=40, width=NAV_SASH)
         nav_scroll = ttk.Scrollbar(nav_frame, orient=tk.VERTICAL, command=self.nav.yview)
         self.nav.configure(yscrollcommand=nav_scroll.set)
-        self.nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        nav_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        _grid_with_yscroll(nav_frame, self.nav, nav_scroll)
         self.nav.bind("<<TreeviewSelect>>", self._on_nav_select)
 
         table_frame = ttk.Frame(right, padding=4)
@@ -114,12 +142,11 @@ class App:
             self.table.column(col, width=widths[col], stretch=(col == "title"))
         table_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.table.yview)
         self.table.configure(yscrollcommand=table_scroll.set)
-        self.table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        table_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        _grid_with_yscroll(table_frame, self.table, table_scroll)
         self.table.bind("<<TreeviewSelect>>", self._on_table_select)
 
         preview_frame = ttk.Frame(bottom, padding=4)
-        files_frame = ttk.Frame(bottom, padding=4)
+        files_frame = ttk.Frame(bottom, padding=4, width=FILES_SASH)
         bottom.add(preview_frame, weight=1)
         bottom.add(files_frame, weight=0)
 
@@ -143,13 +170,19 @@ class App:
             selectmode="browse",
             displaycolumns=(),
         )
-        self.files.column("#0", stretch=True)
+        self.files.column("#0", stretch=True, minwidth=40, width=FILES_SASH)
         files_scroll = ttk.Scrollbar(files_body, orient=tk.VERTICAL, command=self.files.yview)
         self.files.configure(yscrollcommand=files_scroll.set)
-        self.files.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        files_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        _grid_with_yscroll(files_body, self.files, files_scroll)
         self.files.bind("<<TreeviewSelect>>", self._on_file_select)
 
+        self.outer.bind("<Configure>", self._on_outer_configure)
+        self.bottom.bind("<Configure>", self._on_bottom_configure)
+        self.outer.bind("<ButtonRelease-1>", lambda _e: self.root.after_idle(self._place_nav_sash))
+        self.bottom.bind(
+            "<ButtonRelease-1>",
+            lambda _e: self.root.after_idle(self._place_files_sash),
+        )
         self.root.bind("<Control-o>", lambda _e: self._choose_workspace())
         self.root.bind("<F5>", lambda _e: self._refresh())
         self.root.bind("<Control-q>", lambda _e: self.root.destroy())
@@ -196,13 +229,77 @@ class App:
         self.empty_recents.pack(anchor="w", fill=tk.X, pady=(16, 0))
 
     def _place_sashes(self) -> None:
+        self._place_nav_sash()
+        self._place_files_sash()
+
+    def _place_nav_sash(self) -> None:
+        if self._placing_nav:
+            return
+        self._placing_nav = True
         try:
-            self.outer.sashpos(0, 220)
-            width = self.bottom.winfo_width()
-            if width > 1:
-                self.bottom.sashpos(0, max(200, width - 240))
+            if not self.outer.winfo_manager():
+                return
+            width = int(self.outer.winfo_width())
+            if width < 50:
+                self.root.update_idletasks()
+                width = int(self.outer.winfo_width())
+            if width < 50:
+                if self._nav_sash_wait < 50:
+                    self._nav_sash_wait += 1
+                    self.root.after(10, self._place_nav_sash)
+                return
+            self._nav_sash_wait = 0
+            current = int(self.outer.sashpos(0))
+            target = desired_nav_sash(current, width)
+            if target is not None and target != current:
+                self.outer.sashpos(0, target)
+                current = int(self.outer.sashpos(0))
+            if current >= NAV_SASH_MIN:
+                self._nav_sash_ready = True
         except tk.TclError:
-            pass
+            return
+        finally:
+            self._placing_nav = False
+
+    def _place_files_sash(self) -> None:
+        if self._placing_files:
+            return
+        self._placing_files = True
+        try:
+            if not self.bottom.winfo_manager():
+                return
+            width = int(self.bottom.winfo_width())
+            if width < 50:
+                self.root.update_idletasks()
+                width = int(self.bottom.winfo_width())
+            if width < 50:
+                if self._files_sash_wait < 50:
+                    self._files_sash_wait += 1
+                    self.root.after(10, self._place_files_sash)
+                return
+            self._files_sash_wait = 0
+            current = int(self.bottom.sashpos(0))
+            target = desired_files_sash(current, width)
+            if target is not None and target != current:
+                self.bottom.sashpos(0, target)
+                current = int(self.bottom.sashpos(0))
+            files_width = width - current
+            if files_width >= FILES_SASH_MIN:
+                self._files_sash_ready = True
+        except tk.TclError:
+            return
+        finally:
+            self._placing_files = False
+
+    def _on_outer_configure(self, event: tk.Event) -> None:
+        if event.widget != self.outer or self._nav_sash_ready:
+            return
+        self.root.after_idle(self._place_nav_sash)
+
+    def _on_bottom_configure(self, event: tk.Event) -> None:
+        if event.widget != self.bottom or self._files_sash_ready:
+            return
+        self.root.after_idle(self._place_files_sash)
 
     def _set_workspace_visible(self, show: bool) -> None:
         if show:
@@ -210,7 +307,12 @@ class App:
             self.outer.pack(fill=tk.BOTH, expand=True)
             self._refresh_btn.state(["!disabled"])
             self._file_menu.entryconfig("Refresh", state=tk.NORMAL)
+            self._nav_sash_wait = 0
+            self._files_sash_wait = 0
+            self._nav_sash_ready = False
+            self._files_sash_ready = False
             self.root.after_idle(self._place_sashes)
+            self.root.after(1, self._place_sashes)
         else:
             self.outer.pack_forget()
             self.empty_body.pack(fill=tk.BOTH, expand=True)
@@ -618,6 +720,15 @@ def _select_all(event: tk.Event) -> str:
     widget.mark_set("insert", "1.0")
     widget.see("insert")
     return "break"
+
+
+def _grid_with_yscroll(parent: tk.Misc, tree: ttk.Treeview, scroll: ttk.Scrollbar) -> None:
+    """Keep the scrollbar visible when the parent shrinks (pack drops it)."""
+    parent.grid_rowconfigure(0, weight=1)
+    parent.grid_columnconfigure(0, weight=1)
+    parent.grid_columnconfigure(1, weight=0)
+    tree.grid(row=0, column=0, sticky="nsew")
+    scroll.grid(row=0, column=1, sticky="ns")
 
 
 def _configure_theme(root: tk.Tk) -> None:
