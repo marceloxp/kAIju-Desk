@@ -57,6 +57,7 @@ kaiju status 1 in-progress
 kaiju close 1                     # closed_at + [on].close (done); STATUS overrides
 kaiju search data_free            # regex over the whole workspace
 kaiju search "" --open            # listing is a search with filters
+kaiju gui                         # local read-only viewer (Tk)
 ```
 
 | Command | What it does |
@@ -66,6 +67,7 @@ kaiju search "" --open            # listing is a search with filters
 | `add` | allocates the next code and scaffolds the card |
 | `status` / `close` / `reopen` | rewrite only the front-matter, never `MEMORY.md` or `DELIVERY.md` |
 | `search` | regex over the three files, the backlog and text attachments, paginated |
+| `gui` | local read-only viewer: cards in a table, the three files, attachments |
 
 `CARD` accepts the full code (`MT-0003`) or just the number (`3`).
 

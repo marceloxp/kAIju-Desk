@@ -126,6 +126,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--limit", type=int, default=10, metavar="N")
     p_search.add_argument("--page", type=int, default=1, metavar="P")
 
+    p_gui = sub.add_parser(
+        "gui",
+        help="opens a local read-only viewer",
+        description="Opens a local read-only viewer of the workspace.",
+    )
+    p_gui.add_argument(
+        "dir",
+        nargs="?",
+        default=None,
+        help="workspace directory (default: discover from current directory)",
+    )
+
     return parser
 
 
@@ -136,6 +148,8 @@ def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     start = _start_dir(args)
     if args.command == "init":
         return cmd_init(args, start)
+    if args.command == "gui":
+        return cmd_gui(args, start)
     ws = find_workspace(start)
     if args.command == "guide":
         sys.stdout.write(render_guide(ws))
@@ -158,6 +172,20 @@ def _start_dir(args: argparse.Namespace) -> Path:
     if args.start_dir:
         return Path(args.start_dir)
     return Path.cwd()
+
+
+def cmd_gui(args: argparse.Namespace, start: Path) -> int:
+    start = start if start.is_absolute() else Path.cwd() / start
+    if args.dir:
+        target = Path(args.dir)
+        if not target.is_absolute():
+            target = start / target
+    else:
+        target = start
+    from kaiju.gui import run
+
+    run(target)
+    return 0
 
 
 def cmd_init(args: argparse.Namespace, start: Path) -> int:
