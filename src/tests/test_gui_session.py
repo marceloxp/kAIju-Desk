@@ -257,6 +257,32 @@ def test_about_png_is_png_and_small():
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_icon_png_is_png_and_small():
+    path = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "icon.png"
+    assert path.is_file()
+    assert path.stat().st_size < 20_000
+    assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_apply_window_icon_keeps_photo():
+    import tkinter as tk
+
+    import pytest
+
+    from kaiju.gui.app import _apply_window_icon
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no display")
+    root.withdraw()
+    try:
+        _apply_window_icon(root)
+        assert getattr(root, "_kaiju_icon", None) is not None
+    finally:
+        root.destroy()
+
+
 def test_maybe_reexec_is_noop_under_pytest():
     from kaiju.gui.native_tk import maybe_reexec_for_native_tk
 

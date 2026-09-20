@@ -87,6 +87,7 @@ class App:
 
     def _build(self) -> None:
         self.root.title("kAIju")
+        _apply_window_icon(self.root)
         self.root.minsize(800, 500)
         self.root.geometry("1100x700")
         self._build_menu()
@@ -729,6 +730,18 @@ def _grid_with_yscroll(parent: tk.Misc, tree: ttk.Treeview, scroll: ttk.Scrollba
     parent.grid_columnconfigure(1, weight=0)
     tree.grid(row=0, column=0, sticky="nsew")
     scroll.grid(row=0, column=1, sticky="ns")
+
+
+def _apply_window_icon(root: tk.Tk) -> None:
+    path = Path(__file__).with_name("icon.png")
+    if not path.is_file():
+        return
+    try:
+        photo = tk.PhotoImage(file=str(path))
+    except tk.TclError:
+        return
+    root.iconphoto(True, photo)
+    root._kaiju_icon = photo  # type: ignore[attr-defined]
 
 
 def _configure_theme(root: tk.Tk) -> None:
