@@ -10,6 +10,10 @@ def test_init_creates_toml_and_backlog_not_readme(capsys, tmp_path, today):
     text = (tmp_path / "kaiju.toml").read_text(encoding="utf-8")
     assert 'prefix = "MT"' in text
     assert 'name   = "maintenance"' in text
+    assert "[on]" in text
+    assert 'add    = "open"' in text
+    assert 'close  = "done"' in text
+    assert 'reopen = "open"' in text
     backlog = (tmp_path / "BACKLOG.md").read_text(encoding="utf-8")
     assert backlog.startswith("# Backlog\n")
     assert backlog.endswith("\n")
@@ -97,6 +101,7 @@ def test_invalid_config_additional_core_field(capsys, tmp_path, today):
     (tmp_path / "kaiju.toml").write_text(
         'name = "x"\nprefix = "MT"\ndigits = 4\n'
         '[status]\nopen = "a"\n'
+        '[on]\nadd = "open"\nclose = "open"\nreopen = "open"\n'
         '[additional_fields]\nstatus = "nope"\n',
         encoding="utf-8",
     )
@@ -105,10 +110,35 @@ def test_invalid_config_additional_core_field(capsys, tmp_path, today):
     assert "core" in err
 
 
+def test_invalid_config_missing_on(capsys, tmp_path, today):
+    (tmp_path / "kaiju.toml").write_text(
+        'name = "x"\nprefix = "MT"\ndigits = 4\n[status]\nopen = "a"\n',
+        encoding="utf-8",
+    )
+    code, _, err = run(capsys, ["-C", str(tmp_path), "guide"])
+    assert code == 1
+    assert "missing [on] table" in err
+
+
+def test_invalid_config_on_unknown_status(capsys, tmp_path, today):
+    (tmp_path / "kaiju.toml").write_text(
+        'name = "x"\nprefix = "MT"\ndigits = 4\n'
+        '[status]\nopen = "a"\n'
+        '[on]\nadd = "open"\nclose = "nope"\nreopen = "open"\n',
+        encoding="utf-8",
+    )
+    code, _, err = run(capsys, ["-C", str(tmp_path), "guide"])
+    assert code == 1
+    assert '[on].close status "nope" does not exist' in err
+
+
 def test_load_config_preserves_status_order(tmp_path):
     (tmp_path / "kaiju.toml").write_text(
-        'name = "x"\nprefix = "MT"\ndigits = 4\n[status]\nzebra = "z"\nopen = "a"\n',
+        'name = "x"\nprefix = "MT"\ndigits = 4\n'
+        '[status]\nzebra = "z"\nopen = "a"\n'
+        '[on]\nadd = "zebra"\nclose = "open"\nreopen = "zebra"\n',
         encoding="utf-8",
     )
     cfg = load_config(tmp_path / "kaiju.toml")
     assert list(cfg.statuses) == ["zebra", "open"]
+    assert cfg.on == {"add": "zebra", "close": "open", "reopen": "zebra"}

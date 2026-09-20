@@ -53,13 +53,16 @@ def render_guide(ws: Workspace) -> str:
             "",
         ]
     )
-    first = True
     for name, desc in cfg.statuses.items():
-        suffix = " (initial)" if first else ""
-        first = False
-        lines.append(f"- `{name}`{suffix}: {desc}")
+        lines.append(f"- `{name}`: {desc}")
     lines.extend(
         [
+            "",
+            "Without a STATUS argument, `add`/`close`/`reopen` use `[on]`:",
+            "",
+            f"- `add` → `{cfg.on['add']}`",
+            f"- `close` → `{cfg.on['close']}`",
+            f"- `reopen` → `{cfg.on['reopen']}`",
             "",
             "Closing requires nothing. Close when the human gives approval; if there's no DELIVERY, let it be a conscious choice.",
             "",
@@ -91,7 +94,7 @@ def render_guide(ws: Workspace) -> str:
             "",
             f"CARD accepts `{cfg.prefix}-0003` or just `3`. Use `search` to find; don't try to list everything.",
             'Regex starting with `-` goes after `--`: `kaiju search -- "-x"`.',
-            "`reopen` without STATUS returns the card to the initial status.",
+            "`close`/`reopen` without STATUS use `[on]`; an explicit STATUS wins.",
         ]
     )
     readme = ws.root / "README.md"

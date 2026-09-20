@@ -215,7 +215,7 @@ def add_card(
         "README.md": templates.card_readme(
             code=code,
             title=title,
-            status=initial_status(ws),
+            status=on_status(ws, "add"),
             created_at=today(),
             epic=epic_code,
             parent=parent_code,
@@ -251,12 +251,16 @@ def set_status(ws: Workspace, arg: str, status: str) -> tuple[Card, Card]:
 
 
 def close_card(ws: Workspace, arg: str, status: str | None = None) -> tuple[Card, Card]:
+    """Without STATUS, a first close uses [on].close. A second close keeps status."""
     before = get_card(ws, arg)
     updates: dict[str, str] = {}
+    closing = before.closed_at == ""
     if status is not None:
         _require_status(ws, status)
         updates["status"] = status
-    if before.closed_at == "":
+    elif closing:
+        updates["status"] = on_status(ws, "close")
+    if closing:
         updates["closed_at"] = today()
     if updates:
         frontmatter.set_fields(before.readme_path, updates)
@@ -265,14 +269,14 @@ def close_card(ws: Workspace, arg: str, status: str | None = None) -> tuple[Card
 
 
 def reopen_card(ws: Workspace, arg: str, status: str | None = None) -> tuple[Card, Card]:
-    """Without STATUS, a closed card goes back to the initial status."""
+    """Without STATUS, a closed card uses [on].reopen."""
     if status is not None:
         _require_status(ws, status)
     before = get_card(ws, arg)
     updates: dict[str, str] = {}
     if before.is_closed:
         updates["closed_at"] = ""
-        updates["status"] = status if status is not None else initial_status(ws)
+        updates["status"] = status if status is not None else on_status(ws, "reopen")
     elif status is not None:
         updates["status"] = status
     if updates:
@@ -281,8 +285,8 @@ def reopen_card(ws: Workspace, arg: str, status: str | None = None) -> tuple[Car
     return before, after
 
 
-def initial_status(ws: Workspace) -> str:
-    return next(iter(ws.config.statuses))
+def on_status(ws: Workspace, event: str) -> str:
+    return ws.config.on[event]
 
 
 def _require_status(ws: Workspace, status: str) -> None:

@@ -12,13 +12,19 @@ def kaiju_toml(*, name: str, prefix: str, digits: int) -> str:
         f"prefix = {toml_basic_string(prefix)}\n"
         f"digits = {digits}\n"
         "\n"
-        "# Free status: name = description. The first is the initial status.\n"
+        "# Free status: name = description.\n"
         '# "Closed" means having closed_at filled (kaiju close), whatever the status.\n'
         "[status]\n"
         'open        = "request registered, work not yet started"\n'
         'in-progress = "work in progress; MEMORY.md being written"\n'
         'done        = "delivered, with human approval"\n'
         'cancelled   = "will not be done; reason in DELIVERY.md"\n'
+        "\n"
+        "# Event → status when the command has no STATUS argument. Edit freely.\n"
+        "[on]\n"
+        'add    = "open"\n'
+        'close  = "done"\n'
+        'reopen = "open"\n'
         "\n"
         "# Extra fields for card front-matter: name = description.\n"
         "[additional_fields]\n"

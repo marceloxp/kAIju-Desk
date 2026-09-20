@@ -2,6 +2,11 @@
 
 # kAIju-Desk
 
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Version](https://img.shields.io/badge/version-0.1.0-0A7A3E)
+![uv](https://img.shields.io/badge/packaging-uv-DE5FE9?logo=uv&logoColor=white)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 > A work contract between human and AI that lives in the folder.
 
 `kaiju` is a small CLI that holds the convention you and your coding agent already
@@ -11,7 +16,7 @@ subfolder with three files. The state of the task is the front-matter of its
 
 ```text
 .ai/maintenance/             ← the workspace
-├── kaiju.toml               ← prefix, statuses, extra fields
+├── kaiju.toml               ← prefix, statuses, [on] events, extra fields
 ├── README.md                ← rules specific to this workspace (you write it)
 ├── BACKLOG.md               ← findings that are not tasks yet
 └── MT-0001/                 ← a card
@@ -47,9 +52,9 @@ kaiju --version
 cd .ai/maintenance
 kaiju init --prefix MT            # this folder becomes a workspace
 kaiju guide                       # the contract, for the agent to read
-kaiju add "Indexes on created_at" # folder + three files + record
+kaiju add "Indexes on created_at" # folder + three files; status from [on].add
 kaiju status 1 in-progress
-kaiju close 1 done                # fills closed_at; requires nothing else
+kaiju close 1                     # closed_at + [on].close (done); STATUS overrides
 kaiju search data_free            # regex over the whole workspace
 kaiju search "" --open            # listing is a search with filters
 ```
@@ -67,8 +72,8 @@ kaiju search "" --open            # listing is a search with filters
 ## The rules that matter
 
 - **Free statuses.** They are defined in `kaiju.toml`, each with a description the
-  agent reads. Being closed is having `closed_at` filled, whatever the status is
-  called.
+  agent reads. `[on]` maps `add`/`close`/`reopen` to a status. Being closed is
+  having `closed_at` filled, whatever the status is called.
 - **Nothing blocks the work.** Closing a card requires no `DELIVERY.md`. The only
   refusal is on creation: a duplicate title, or an epic/parent that does not exist.
 - **Epics without a new field.** A card is an epic when its `epic` is its own code

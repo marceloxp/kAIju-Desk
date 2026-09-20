@@ -17,13 +17,17 @@ def test_guide_contents(capsys, tmp_path, today):
     assert "next card: MT-0003" in out
     assert "1 open" in out
     assert "1 closed" in out
-    assert "`open` (initial):" in out
+    assert "`open`:" in out
     assert "`in-progress`:" in out
+    assert "`add` → `open`" in out
+    assert "`close` → `done`" in out
+    assert "`reopen` → `open`" in out
     assert "`category`:" in out
     assert "free classification of the card" in out
     assert "## Workspace rules (README.md)" in out
     assert "Only in this workspace." in out
     assert 'kaiju search "" --open' in out
+    assert "`close`/`reopen` without STATUS use `[on]`" in out
 
 
 def test_guide_omits_workspace_readme_section_when_absent(capsys, tmp_path, today):

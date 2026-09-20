@@ -22,6 +22,7 @@ PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9]*$")
 STATUS_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 ADDITIONAL_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ON_EVENTS = ("add", "close", "reopen")
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class Config:
     prefix: str
     digits: int
     statuses: dict[str, str]
+    on: dict[str, str]
     additional_fields: dict[str, str]
 
 
@@ -146,6 +148,8 @@ def load_config(path: Path) -> Config:
             raise KaijuError(f'{path}: description of status "{key}" must be string')
         statuses[key] = value
 
+    on = _load_on(path, data, statuses)
+
     additional: dict[str, str] = {}
     if "additional_fields" in data:
         extra_raw = data["additional_fields"]
@@ -168,8 +172,28 @@ def load_config(path: Path) -> Config:
         prefix=prefix,
         digits=digits,
         statuses=statuses,
+        on=on,
         additional_fields=additional,
     )
+
+
+def _load_on(path: Path, data: dict, statuses: dict[str, str]) -> dict[str, str]:
+    if "on" not in data:
+        raise KaijuError(f"{path}: missing [on] table")
+    raw = data["on"]
+    if not isinstance(raw, dict):
+        raise KaijuError(f"{path}: [on] must be a table")
+    on: dict[str, str] = {}
+    for event in ON_EVENTS:
+        if event not in raw:
+            raise KaijuError(f"{path}: missing [on].{event}")
+        value = raw[event]
+        if not isinstance(value, str):
+            raise KaijuError(f"{path}: [on].{event} must be string")
+        if value not in statuses:
+            raise KaijuError(f'{path}: [on].{event} status "{value}" does not exist')
+        on[event] = value
+    return on
 
 
 def _require_str(path: Path, data: dict, key: str) -> str:

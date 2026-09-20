@@ -54,7 +54,7 @@ Do not duplicate across the three files. Delivery ≠ README; trail ≠ DELIVERY
 
 **Backlog:** never parsed, only searched. Suggested `## Open` / `## Dropped` with `###` findings. Mid-card discoveries go here; the current card does not grow. Become a card (`kaiju add`, cite `## Origin`) or move to Dropped with a reason.
 
-**Statuses:** `[status]`; first key is initial. Template: `open`, `in-progress`, `done`, `cancelled`. **Core fields:** `card`, `title`, `status`, `created_at`, `closed_at`, `epic`, `parent`. Extras from `[additional_fields]` (template: `category`, `branch`, `agent_resume`).
+**Statuses:** `[status]` names; `[on]` maps `add`/`close`/`reopen` to a status (CLI STATUS on close/reopen still wins). Template: `open`, `in-progress`, `done`, `cancelled`. **Core fields:** `card`, `title`, `status`, `created_at`, `closed_at`, `epic`, `parent`. Extras from `[additional_fields]` (template: `category`, `branch`, `agent_resume`).
 
 ## CLI (v0)
 
@@ -74,8 +74,8 @@ kaiju search "" --open
 
 - `init` refuses an existing workspace or a dir inside one. Writes `kaiju.toml` + `BACKLOG.md` (no overwrite of backlog; no workspace README). Suggests one line for the host repo’s `CLAUDE.md`/`AGENTS.md`.
 - `guide` is the contract for the *using* agent (plus workspace README if present). Run it before changing cards.
-- `add` = max `PREFIX-NNNN` folder + 1 (prefix-matching folders count even if not cards). Duplicate titles: ignore case, accents, repeated whitespace; includes closed cards.
-- `status`/`close`/`reopen` patch front-matter only. Never touch MEMORY, DELIVERY, or README body. `close` sets `closed_at` to today; a second close keeps the original date. `reopen` with no STATUS → initial status.
+- `add` = max `PREFIX-NNNN` folder + 1 (prefix-matching folders count even if not cards). Duplicate titles: ignore case, accents, repeated whitespace; includes closed cards. Status from `[on].add`.
+- `status`/`close`/`reopen` patch front-matter only. Never touch MEMORY, DELIVERY, or README body. `close` sets `closed_at` to today and, without STATUS, `[on].close`; a second close keeps the original date and does not reapply `[on].close`. `reopen` with no STATUS → `[on].reopen`.
 - `search` over the three files, text attachments, and (unless a card filter is on) BACKLOG + workspace README. Skip >1 MiB, binaries (NUL in first 8 KiB), hidden names, directory symlinks. Empty regex + filters = listing.
 
 Exit: `0` success (including empty search), `1` `KaijuError`, `2` argparse. Predicted failures: `error: …` on stderr, no traceback.
@@ -88,7 +88,7 @@ Entry: `kaiju.cli:main`. Version in `kaiju/__init__.py`.
 
 | Module                      | Owns                                                                        |
 | --------------------------- | --------------------------------------------------------------------------- |
-| `workspace.py`              | Config/Workspace, discovery, init, `today()`, `atomic_write`                |
+| `workspace.py`              | Config (incl. `[on]`), discovery, init, `today()`, `atomic_write`  |
 | `frontmatter.py`            | parse (`key: value`, skip blank/`#`, first key wins); `set_fields` in place |
 | `cards.py`                  | scan, numbering, add/status/close/reopen                                    |
 | `search.py`                 | filters, regex hits, snippets, `--cards`                                    |
