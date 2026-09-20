@@ -79,7 +79,7 @@ kaiju gui [DIR]
 - `add` = max `PREFIX-NNNN` folder + 1 (prefix-matching folders count even if not cards). Duplicate titles: ignore case, accents, repeated whitespace; includes closed cards. Status from `[on].add`.
 - `status`/`close`/`reopen` patch front-matter only. Never touch MEMORY, DELIVERY, or README body. `close` sets `closed_at` to today and, without STATUS, `[on].close`; a second close keeps the original date and does not reapply `[on].close`. `reopen` with no STATUS → `[on].reopen`.
 - `search` over the three files, text attachments, and (unless a card filter is on) BACKLOG + workspace README. Skip >1 MiB, binaries (NUL in first 8 KiB), hidden names, directory symlinks. Empty regex + filters = listing.
-- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Distinct from planned `serve`. Tkinter is imported only on this path. On Linux, if the current interpreter's Tk has no Xft (typical of uv-managed CPython), the GUI re-execs a system Python so fonts anti-alias.
+- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Tkinter is imported only on this path. On Linux, if the current interpreter's Tk has no Xft (typical of uv-managed CPython), the GUI re-execs a system Python so fonts anti-alias.
 
 Exit: `0` success (including empty search), `1` `KaijuError`, `2` argparse. Predicted failures: `error: …` on stderr, no traceback.
 
@@ -112,4 +112,4 @@ Do not: add runtime deps; require DELIVERY to close; parse/rewrite backlog struc
 
 ## Later (do not start unless asked)
 
-The Tk viewer is `kaiju gui`. `kaiju serve`: local browser viewer on `127.0.0.1`, no auth, disposable SQLite cache of front-matters. Filesystem stays truth. Still out of scope: Jira, FTS, sprints, web edits, public bind, backlog commands, validation that blocks work.
+The local viewer is `kaiju gui`. Still out of scope: Jira, FTS, sprints, a browser viewer, web edits, public bind, backlog commands, validation that blocks work.

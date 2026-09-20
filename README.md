@@ -62,6 +62,8 @@ kaiju gui                         # local read-only viewer (Tk)
 kaiju gui examples                # the sample workspace in this repository
 ```
 
+![kAIju gui](images/screenshot.png)
+
 | Command | What it does |
 |---|---|
 | `init` | turns a directory into a workspace (`kaiju.toml`, `BACKLOG.md`) |
@@ -96,12 +98,10 @@ kaiju gui examples                # the sample workspace in this repository
 
 ## Status
 
-v0: the CLI. Python 3.10+, stdlib plus `tomli` at runtime, tests
-with pytest, lint with ruff. The code lives in [`src/`](src/README.md).
-
-Planned next: a local browser viewer (`kaiju serve`) with a filtered, paginated
-list and a rebuildable SQLite cache of the front-matters. The filesystem stays the
-source of truth.
+v0: the CLI and a local read-only Tk viewer (`kaiju gui`). Python 3.10+,
+stdlib plus `tomli` at runtime, tests with pytest, lint with ruff. The code
+lives in [`src/`](src/README.md). Menu and toolbar icons are Font Awesome,
+from [iconfonttopng](https://iconfonttopng.com/icons/font-awesome).
 
 ## Name
 

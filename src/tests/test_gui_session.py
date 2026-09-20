@@ -264,6 +264,37 @@ def test_icon_png_is_png_and_small():
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_menu_icons_are_png_and_small():
+    from kaiju.gui.app import MENU_ICONS
+
+    folder = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "icons"
+    assert {path.stem for path in folder.glob("*.png")} == set(MENU_ICONS)
+    for name in MENU_ICONS:
+        path = folder / f"{name}.png"
+        assert path.stat().st_size < 2_000
+        assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_photo_loads_menu_icons():
+    import tkinter as tk
+
+    import pytest
+
+    from kaiju.gui.app import MENU_ICONS, _photo
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no display")
+    root.withdraw()
+    try:
+        folder = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "icons"
+        for name in MENU_ICONS:
+            assert _photo(folder / f"{name}.png") is not None
+    finally:
+        root.destroy()
+
+
 def test_apply_window_icon_keeps_photo():
     import tkinter as tk
 

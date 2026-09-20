@@ -37,6 +37,7 @@ NAV_SASH = 220
 NAV_SASH_MIN = 140
 FILES_SASH = 220
 FILES_SASH_MIN = 140
+MENU_ICONS = ("open", "recent", "refresh", "exit", "info")
 
 
 def desired_nav_sash(current: int, pane_width: int) -> int | None:
@@ -82,6 +83,7 @@ class App:
         self._files_sash_wait = 0
         self._nav_sash_ready = False
         self._files_sash_ready = False
+        self._icons: dict[str, tk.PhotoImage] = {}
         self._build()
         self._open_path(start, warn=False)
 
@@ -90,6 +92,7 @@ class App:
         _apply_window_icon(self.root)
         self.root.minsize(800, 500)
         self.root.geometry("1100x700")
+        self._load_icons()
         self._build_menu()
         self._build_toolbar()
         self.status = ttk.Label(self.root, text="", anchor="w", padding=(8, 4), relief="sunken")
@@ -188,6 +191,19 @@ class App:
         self.root.bind("<F5>", lambda _e: self._refresh())
         self.root.bind("<Control-q>", lambda _e: self.root.destroy())
 
+    def _load_icons(self) -> None:
+        folder = Path(__file__).with_name("icons")
+        for name in MENU_ICONS:
+            photo = _photo(folder / f"{name}.png")
+            if photo is not None:
+                self._icons[name] = photo
+
+    def _icon_opts(self, name: str) -> dict[str, object]:
+        photo = self._icons.get(name)
+        if photo is None:
+            return {}
+        return {"image": photo, "compound": "left"}
+
     def _build_menu(self) -> None:
         menubar = tk.Menu(self.root)
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -195,15 +211,34 @@ class App:
             label="Open Workspace…",
             command=self._choose_workspace,
             accelerator="Ctrl+O",
+            **self._icon_opts("open"),
         )
         self._recent_menu = tk.Menu(file_menu, tearoff=0)
-        file_menu.add_cascade(label="Recent Workspaces", menu=self._recent_menu)
-        file_menu.add_command(label="Refresh", command=self._refresh, accelerator="F5")
+        file_menu.add_cascade(
+            label="Recent Workspaces",
+            menu=self._recent_menu,
+            **self._icon_opts("recent"),
+        )
+        file_menu.add_command(
+            label="Refresh",
+            command=self._refresh,
+            accelerator="F5",
+            **self._icon_opts("refresh"),
+        )
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.destroy, accelerator="Ctrl+Q")
+        file_menu.add_command(
+            label="Exit",
+            command=self.root.destroy,
+            accelerator="Ctrl+Q",
+            **self._icon_opts("exit"),
+        )
         menubar.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="About kAIju", command=self._about)
+        help_menu.add_command(
+            label="About kAIju",
+            command=self._about,
+            **self._icon_opts("info"),
+        )
         menubar.add_cascade(label="Help", menu=help_menu)
         self._file_menu = file_menu
         self.root.config(menu=menubar)
@@ -211,10 +246,18 @@ class App:
     def _build_toolbar(self) -> None:
         bar = ttk.Frame(self.root, padding=(6, 4))
         bar.pack(side=tk.TOP, fill=tk.X)
-        ttk.Button(bar, text="Open Workspace…", command=self._choose_workspace).pack(
-            side=tk.LEFT, padx=(0, 4)
+        ttk.Button(
+            bar,
+            text="Open Workspace…",
+            command=self._choose_workspace,
+            **self._icon_opts("open"),
+        ).pack(side=tk.LEFT, padx=(0, 4))
+        self._refresh_btn = ttk.Button(
+            bar,
+            text="Refresh",
+            command=self._refresh,
+            **self._icon_opts("refresh"),
         )
-        self._refresh_btn = ttk.Button(bar, text="Refresh", command=self._refresh)
         self._refresh_btn.pack(side=tk.LEFT)
 
     def _build_empty(self) -> None:
@@ -353,15 +396,10 @@ class App:
         win.resizable(False, False)
         frame = ttk.Frame(win, padding=16)
         frame.pack()
-        img_path = Path(__file__).with_name("about.png")
-        if img_path.is_file():
-            try:
-                photo = tk.PhotoImage(file=str(img_path))
-            except tk.TclError:
-                photo = None
-            if photo is not None:
-                win._about_photo = photo  # type: ignore[attr-defined]
-                ttk.Label(frame, image=photo).pack(pady=(0, 12))
+        photo = _photo(Path(__file__).with_name("about.png"))
+        if photo is not None:
+            win._about_photo = photo  # type: ignore[attr-defined]
+            ttk.Label(frame, image=photo).pack(pady=(0, 12))
         ttk.Label(frame, text=f"kAIju-Desk {__version__}").pack()
         ttk.Label(
             frame,
@@ -732,13 +770,18 @@ def _grid_with_yscroll(parent: tk.Misc, tree: ttk.Treeview, scroll: ttk.Scrollba
     scroll.grid(row=0, column=1, sticky="ns")
 
 
-def _apply_window_icon(root: tk.Tk) -> None:
-    path = Path(__file__).with_name("icon.png")
+def _photo(path: Path) -> tk.PhotoImage | None:
     if not path.is_file():
-        return
+        return None
     try:
-        photo = tk.PhotoImage(file=str(path))
+        return tk.PhotoImage(file=str(path))
     except tk.TclError:
+        return None
+
+
+def _apply_window_icon(root: tk.Tk) -> None:
+    photo = _photo(Path(__file__).with_name("icon.png"))
+    if photo is None:
         return
     root.iconphoto(True, photo)
     root._kaiju_icon = photo  # type: ignore[attr-defined]
