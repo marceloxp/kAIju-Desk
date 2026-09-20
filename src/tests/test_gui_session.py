@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from kaiju.gui.recents import MAX_RECENTS, load_recents, remember_workspace
 from kaiju.gui.session import (
     FILTER_ALL,
     FILTER_BACKLOG,
@@ -175,6 +176,53 @@ def test_gui_help(capsys):
     assert code == 0, err
     assert "read-only" in out.lower() or "viewer" in out.lower()
     assert err == ""
+
+
+def test_gui_parent_returns_without_opening_display(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr("os.fork", lambda: 99)
+
+    def boom(_start: Path) -> None:
+        raise AssertionError("parent process must not start the GUI")
+
+    monkeypatch.setattr("kaiju.gui.run", boom)
+    code, out, err = run(capsys, ["gui", str(tmp_path)])
+    assert code == 0, err
+    assert out == ""
+    assert err == ""
+
+
+def test_remember_workspaces_newest_first(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    first = tmp_path / "one"
+    second = tmp_path / "two"
+    first.mkdir()
+    second.mkdir()
+    remember_workspace(first)
+    remember_workspace(second)
+    remember_workspace(first)
+    recents = load_recents()
+    assert [path.resolve() for path in recents] == [first.resolve(), second.resolve()]
+
+
+def test_remember_workspaces_caps_list(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    paths = []
+    for index in range(MAX_RECENTS + 3):
+        folder = tmp_path / f"ws{index}"
+        folder.mkdir()
+        paths.append(folder)
+        remember_workspace(folder)
+    recents = load_recents()
+    assert len(recents) == MAX_RECENTS
+    assert recents[0].resolve() == paths[-1].resolve()
+    assert recents[-1].resolve() == paths[3].resolve()
+
+
+def test_about_png_is_png_and_small():
+    path = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "about.png"
+    assert path.is_file()
+    assert path.stat().st_size < 20_000
+    assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def _flatten_names(nodes) -> set[str]:

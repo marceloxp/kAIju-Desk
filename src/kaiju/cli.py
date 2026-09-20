@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import os
 import sys
 from pathlib import Path
 
@@ -184,8 +186,29 @@ def cmd_gui(args: argparse.Namespace, start: Path) -> int:
         target = start
     from kaiju.gui import run
 
+    if not _detach_gui_child():
+        return 0
     run(target)
     return 0
+
+
+def _detach_gui_child() -> bool:
+    """Fork so the terminal is free. True in the process that should run Tk."""
+    if not hasattr(os, "fork"):
+        return True
+    try:
+        pid = os.fork()
+    except OSError as exc:
+        raise KaijuError(f"could not detach GUI ({exc})") from exc
+    if pid > 0:
+        return False
+    with contextlib.suppress(OSError):
+        os.setsid()
+    with contextlib.suppress(OSError):
+        null = os.open(os.devnull, os.O_RDWR)
+        os.dup2(null, 0)
+        os.close(null)
+    return True
 
 
 def cmd_init(args: argparse.Namespace, start: Path) -> int:

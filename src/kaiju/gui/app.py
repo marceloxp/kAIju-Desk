@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from kaiju import __version__
 from kaiju.cards import Card
 from kaiju.errors import KaijuError
+from kaiju.gui.recents import load_recents, remember_workspace
 from kaiju.gui.session import (
     CANONICAL,
     FILTER_ALL,
@@ -33,6 +37,7 @@ def run_app(start: Path) -> None:
         root = tk.Tk()
     except tk.TclError as exc:
         raise KaijuError(f"could not open display ({exc})") from exc
+    _configure_fonts(root)
     App(root, start)
     root.mainloop()
 
@@ -59,7 +64,8 @@ class App:
         self.status.pack(side=tk.BOTTOM, fill=tk.X)
 
         self.outer = ttk.Panedwindow(self.root, orient=tk.HORIZONTAL)
-        self.outer.pack(fill=tk.BOTH, expand=True)
+        self.empty_body = ttk.Frame(self.root, padding=24)
+        self._build_empty()
 
         nav_frame = ttk.Frame(self.outer, padding=4)
         right = ttk.Panedwindow(self.outer, orient=tk.VERTICAL)
@@ -145,7 +151,6 @@ class App:
         self.root.bind("<Control-o>", lambda _e: self._choose_workspace())
         self.root.bind("<F5>", lambda _e: self._refresh())
         self.root.bind("<Control-q>", lambda _e: self.root.destroy())
-        self.root.after_idle(self._place_sashes)
 
     def _build_menu(self) -> None:
         menubar = tk.Menu(self.root)
@@ -155,13 +160,16 @@ class App:
             command=self._choose_workspace,
             accelerator="Ctrl+O",
         )
+        self._recent_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Recent Workspaces", menu=self._recent_menu)
         file_menu.add_command(label="Refresh", command=self._refresh, accelerator="F5")
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.destroy, accelerator="Ctrl+Q")
         menubar.add_cascade(label="File", menu=file_menu)
-        view_menu = tk.Menu(menubar, tearoff=0)
-        view_menu.add_command(label="Refresh", command=self._refresh, accelerator="F5")
-        menubar.add_cascade(label="View", menu=view_menu)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="About kAIju", command=self._about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        self._file_menu = file_menu
         self.root.config(menu=menubar)
 
     def _build_toolbar(self) -> None:
@@ -170,7 +178,20 @@ class App:
         ttk.Button(bar, text="Open Workspace…", command=self._choose_workspace).pack(
             side=tk.LEFT, padx=(0, 4)
         )
-        ttk.Button(bar, text="Refresh", command=self._refresh).pack(side=tk.LEFT)
+        self._refresh_btn = ttk.Button(bar, text="Refresh", command=self._refresh)
+        self._refresh_btn.pack(side=tk.LEFT)
+
+    def _build_empty(self) -> None:
+        ttk.Label(
+            self.empty_body,
+            text="No workspace open.",
+        ).pack(anchor="w")
+        ttk.Label(
+            self.empty_body,
+            text="Open a folder that contains kaiju.toml, or pick a recent workspace.",
+        ).pack(anchor="w", pady=(4, 0))
+        self.empty_recents = ttk.Frame(self.empty_body)
+        self.empty_recents.pack(anchor="w", fill=tk.X, pady=(16, 0))
 
     def _place_sashes(self) -> None:
         try:
@@ -180,6 +201,71 @@ class App:
                 self.bottom.sashpos(0, max(200, width - 240))
         except tk.TclError:
             pass
+
+    def _set_workspace_visible(self, show: bool) -> None:
+        if show:
+            self.empty_body.pack_forget()
+            self.outer.pack(fill=tk.BOTH, expand=True)
+            self._refresh_btn.state(["!disabled"])
+            self._file_menu.entryconfig("Refresh", state=tk.NORMAL)
+            self.root.after_idle(self._place_sashes)
+        else:
+            self.outer.pack_forget()
+            self.empty_body.pack(fill=tk.BOTH, expand=True)
+            self._refresh_btn.state(["disabled"])
+            self._file_menu.entryconfig("Refresh", state=tk.DISABLED)
+
+    def _rebuild_recent_menu(self) -> None:
+        self._recent_menu.delete(0, tk.END)
+        recents = load_recents()
+        if not recents:
+            self._recent_menu.add_command(label="(none)", state=tk.DISABLED)
+            return
+        for path in recents:
+            self._recent_menu.add_command(
+                label=path.as_posix(),
+                command=lambda p=path: self._open_path(p, warn=True),
+            )
+
+    def _fill_empty_recents(self) -> None:
+        for child in self.empty_recents.winfo_children():
+            child.destroy()
+        recents = load_recents()
+        if not recents:
+            return
+        ttk.Label(self.empty_recents, text="Recent workspaces").pack(anchor="w")
+        for path in recents:
+            ttk.Button(
+                self.empty_recents,
+                text=path.as_posix(),
+                command=lambda p=path: self._open_path(p, warn=True),
+            ).pack(anchor="w", pady=(4, 0))
+
+    def _about(self) -> None:
+        win = tk.Toplevel(self.root)
+        win.title("About kAIju")
+        win.transient(self.root)
+        win.resizable(False, False)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack()
+        img_path = Path(__file__).with_name("about.png")
+        if img_path.is_file():
+            try:
+                photo = tk.PhotoImage(file=str(img_path))
+            except tk.TclError:
+                photo = None
+            if photo is not None:
+                win._about_photo = photo  # type: ignore[attr-defined]
+                ttk.Label(frame, image=photo).pack(pady=(0, 12))
+        ttk.Label(frame, text=f"kAIju-Desk {__version__}").pack()
+        ttk.Label(
+            frame,
+            text="A work contract between human and AI that lives in the folder.",
+            wraplength=320,
+            justify="center",
+        ).pack(pady=(4, 12))
+        ttk.Button(frame, text="OK", command=win.destroy).pack()
+        win.grab_set()
 
     def _choose_workspace(self) -> None:
         initial = (
@@ -194,6 +280,8 @@ class App:
 
     def _open_path(self, start: Path, *, warn: bool) -> None:
         ok = self.session.open(start)
+        if ok and self.session.workspace is not None:
+            remember_workspace(self.session.workspace.root)
         if not ok and warn and self.session.error:
             messagebox.showerror("kAIju", self.session.error, parent=self.root)
         self._rebuild()
@@ -204,6 +292,14 @@ class App:
         self._rebuild(keep_card=selected)
 
     def _rebuild(self, keep_card: str | None = None) -> None:
+        has_ws = self.session.workspace is not None
+        self._set_workspace_visible(has_ws)
+        self._rebuild_recent_menu()
+        if not has_ws:
+            self._fill_empty_recents()
+            self.root.title("kAIju")
+            self._set_status(self._default_status())
+            return
         self._busy = True
         try:
             self._current_card = None
@@ -216,8 +312,8 @@ class App:
             self._fill_table()
             self._clear_preview()
             self._clear_files()
-            name = self.session.workspace.config.name if self.session.workspace else "kAIju"
-            self.root.title(f"kAIju — {name}" if self.session.workspace else "kAIju")
+            name = self.session.workspace.config.name
+            self.root.title(f"kAIju — {name}")
             if self.session.filter_kind == FILTER_BACKLOG:
                 self._show_backlog()
             else:
@@ -470,16 +566,94 @@ def _make_text(parent: tk.Misc) -> ScrolledText:
     widget = ScrolledText(
         parent,
         wrap="word",
-        state="disabled",
         font="TkFixedFont",
         borderwidth=0,
         highlightthickness=0,
+        undo=False,
     )
+    widget.bind("<Key>", _readonly_key)
+    widget.bind("<<Paste>>", lambda _e: "break")
+    widget.bind("<<Cut>>", lambda _e: "break")
+    widget.bind("<<PasteSelection>>", lambda _e: "break")
+    widget.bind("<Control-a>", _select_all)
+    widget.bind("<Control-A>", _select_all)
     return widget
 
 
+def _readonly_key(event: tk.Event) -> str | None:
+    if event.keysym in {
+        "Left",
+        "Right",
+        "Up",
+        "Down",
+        "Home",
+        "End",
+        "Prior",
+        "Next",
+        "Shift_L",
+        "Shift_R",
+        "Control_L",
+        "Control_R",
+        "Alt_L",
+        "Alt_R",
+        "Meta_L",
+        "Meta_R",
+        "Caps_Lock",
+        "Num_Lock",
+        "Tab",
+        "ISO_Left_Tab",
+        "Escape",
+    }:
+        return None
+    if event.state & 0x4 and event.keysym.lower() in {"a", "c"}:
+        return None
+    return "break"
+
+
+def _select_all(event: tk.Event) -> str:
+    widget = event.widget
+    widget.tag_add("sel", "1.0", "end-1c")
+    widget.mark_set("insert", "1.0")
+    widget.see("insert")
+    return "break"
+
+
+def _configure_fonts(root: tk.Tk) -> None:
+    families = set(tkfont.families(root))
+    ui = _first_family(
+        families,
+        ("DejaVu Sans", "Noto Sans", "Liberation Sans", "Ubuntu", "Cantarell", "Sans"),
+    )
+    mono = _first_family(
+        families,
+        ("DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Ubuntu Mono", "Monospace"),
+    )
+    size = 10
+    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont"):
+        try:
+            tkfont.nametofont(name).configure(family=ui, size=size)
+        except tk.TclError:
+            continue
+    with contextlib.suppress(tk.TclError):
+        tkfont.nametofont("TkFixedFont").configure(family=mono, size=size)
+    style = ttk.Style(root)
+    rowheight = 24
+    style.configure(".", font=(ui, size))
+    style.configure("Treeview", font=(ui, size), rowheight=rowheight)
+    style.configure("Treeview.Heading", font=(ui, size))
+    style.configure("TLabel", font=(ui, size))
+    style.configure("TButton", font=(ui, size))
+
+
+def _first_family(families: set[str], wanted: tuple[str, ...]) -> str:
+    available = {name.casefold(): name for name in families}
+    for name in wanted:
+        match = available.get(name.casefold())
+        if match is not None:
+            return match
+    return wanted[-1]
+
+
 def _set_text(widget: ScrolledText, content: str) -> None:
-    widget.configure(state="normal")
     widget.delete("1.0", "end")
     widget.insert("1.0", content)
-    widget.configure(state="disabled")
