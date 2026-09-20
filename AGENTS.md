@@ -14,6 +14,7 @@ Successor of `vm`, without Jira. Name: Jira ← *Gojira*; this keeps the monster
 
 ```text
 AGENTS.md  README.md  images/
+examples/     sample workspace (`kaiju gui examples`)
 .resources/   source art (gitignored; not product docs)
 .sandbox/     manual tryouts (gitignored; tests must not use it)
 .cursor/      local Cursor rules (gitignored)
@@ -105,7 +106,7 @@ Entry: `kaiju.cli:main`. Version in `kaiju/__init__.py`.
 cd src && uv run pytest && uv run ruff check . && uv run ruff format .
 ```
 
-Tests use tmp dirs, not `.sandbox/`. CLI, templates, and `guide` are English. Ruff line length 100; `guide.py` ignores E501.
+Tests use tmp dirs, not `.sandbox/`. The sample workspace in `examples/` is versioned for humans; a small test only checks that it still opens. CLI, templates, and `guide` are English. Ruff line length 100; `guide.py` ignores E501.
 
 Do not: add runtime deps; require DELIVERY to close; parse/rewrite backlog structure; auto-fix non-cards; follow dir symlinks; print from core. Failed `add` must leave no orphan folder.
 

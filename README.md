@@ -44,6 +44,7 @@ Requires [uv](https://docs.astral.sh/uv/). From the repository root:
 ```bash
 uv tool install --editable ./src
 kaiju --version
+kaiju gui examples                # sample workspace in this repository
 ```
 
 ## Use
@@ -58,6 +59,7 @@ kaiju close 1                     # closed_at + [on].close (done); STATUS overri
 kaiju search data_free            # regex over the whole workspace
 kaiju search "" --open            # listing is a search with filters
 kaiju gui                         # local read-only viewer (Tk)
+kaiju gui examples                # the sample workspace in this repository
 ```
 
 | Command | What it does |

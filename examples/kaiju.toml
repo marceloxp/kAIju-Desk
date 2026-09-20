@@ -1,0 +1,24 @@
+# kAIju Workspace — run `kaiju guide` to see the contract.
+name   = "example"
+prefix = "MT"
+digits = 4
+
+# Free status: name = description.
+# "Closed" means having closed_at filled (kaiju close), whatever the status.
+[status]
+open        = "request registered, work not yet started"
+in-progress = "work in progress; MEMORY.md being written"
+done        = "delivered, with human approval"
+cancelled   = "will not be done; reason in DELIVERY.md"
+
+# Event → status when the command has no STATUS argument. Edit freely.
+[on]
+add    = "open"
+close  = "done"
+reopen = "open"
+
+# Extra fields for card front-matter: name = description.
+[additional_fields]
+category     = "free classification of the card (e.g.: database, code, infra)"
+branch       = "git branch where the work happens"
+agent_resume = "command to resume the agent session (e.g.: claude --resume <id>)"
