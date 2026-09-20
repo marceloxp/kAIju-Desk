@@ -14,6 +14,18 @@ def recents_path() -> Path:
     return base / "kaiju" / "recent-workspaces"
 
 
+def is_workspace(path: Path) -> bool:
+    try:
+        return path.is_dir() and (path / "kaiju.toml").is_file()
+    except OSError:
+        return False
+
+
+def usable_recents() -> list[Path]:
+    """Recents whose folder still exists and is a kAIju workspace."""
+    return [path for path in load_recents() if is_workspace(path)]
+
+
 def load_recents() -> list[Path]:
     path = recents_path()
     if not path.is_file():

@@ -21,7 +21,7 @@ examples/     sample workspace (`kaiju gui examples`)
 src/          the whole product (pyproject.toml, kaiju/, tests/)
 ```
 
-Install from repo root: `uv tool install --editable ./src`. Run `kaiju` or `python -m kaiju`. Python >= 3.10; runtime = stdlib + `tomli` on 3.10. CLI is `argparse`. No click/typer/rich/PyYAML.
+Install from repo root: `uv tool install --editable ./src`. Run `kaiju` or `python -m kaiju`. Python >= 3.10; runtime = stdlib + `tomli`. CLI is `argparse`. No click/typer/rich/PyYAML.
 
 Do not invent commands, flags, fields, or dependencies. After v0, root docs are fair game when asked.
 
@@ -79,7 +79,7 @@ kaiju gui [DIR]
 - `add` = max `PREFIX-NNNN` folder + 1 (prefix-matching folders count even if not cards). Duplicate titles: ignore case, accents, repeated whitespace; includes closed cards. Status from `[on].add`.
 - `status`/`close`/`reopen` patch front-matter only. Never touch MEMORY, DELIVERY, or README body. `close` sets `closed_at` to today and, without STATUS, `[on].close`; a second close keeps the original date and does not reapply `[on].close`. `reopen` with no STATUS → `[on].reopen`.
 - `search` over the three files, text attachments, and (unless a card filter is on) BACKLOG + workspace README. Skip >1 MiB, binaries (NUL in first 8 KiB), hidden names, directory symlinks. Empty regex + filters = listing.
-- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Distinct from planned `serve`. Tkinter is imported only on this path.
+- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Distinct from planned `serve`. Tkinter is imported only on this path. On Linux, if the current interpreter's Tk has no Xft (typical of uv-managed CPython), the GUI re-execs a system Python so fonts anti-alias.
 
 Exit: `0` success (including empty search), `1` `KaijuError`, `2` argparse. Predicted failures: `error: …` on stderr, no traceback.
 

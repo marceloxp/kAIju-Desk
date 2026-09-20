@@ -1,6 +1,13 @@
+import os
 from pathlib import Path
 
-from kaiju.gui.recents import MAX_RECENTS, load_recents, remember_workspace
+from kaiju.gui.fonts import pick_mono_family, pick_ui_family
+from kaiju.gui.recents import (
+    MAX_RECENTS,
+    load_recents,
+    remember_workspace,
+    usable_recents,
+)
 from kaiju.gui.session import (
     FILTER_ALL,
     FILTER_BACKLOG,
@@ -218,11 +225,49 @@ def test_remember_workspaces_caps_list(monkeypatch, tmp_path):
     assert recents[-1].resolve() == paths[3].resolve()
 
 
+def test_usable_recents_skips_missing_and_non_workspaces(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    alive = tmp_path / "alive"
+    alive.mkdir()
+    (alive / "kaiju.toml").write_text('name = "x"\n', encoding="utf-8")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    remember_workspace(alive)
+    remember_workspace(empty)
+    remember_workspace(tmp_path / "gone")
+    recents = load_recents()
+    assert len(recents) == 3
+    usable = usable_recents()
+    assert [path.resolve() for path in usable] == [alive.resolve()]
+
+
+def test_pick_ui_family_skips_mono_and_matches_without_spaces():
+    assert pick_ui_family({"DejaVu Sans Mono", "DejaVu Sans"}) == "DejaVu Sans"
+    assert pick_ui_family({"Noto Sans Mono", "Liberation Sans"}) == "Liberation Sans"
+    assert pick_ui_family({"DejaVuSans", "Courier"}) == "DejaVuSans"
+    ui = pick_ui_family({"DejaVu Sans Mono", "Ubuntu Mono", "Noto Sans Mono"})
+    assert "mono" not in ui.casefold()
+    assert pick_mono_family({"DejaVu Sans", "DejaVu Sans Mono"}) == "DejaVu Sans Mono"
+
+
 def test_about_png_is_png_and_small():
     path = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "about.png"
     assert path.is_file()
     assert path.stat().st_size < 20_000
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_maybe_reexec_is_noop_under_pytest():
+    from kaiju.gui.native_tk import maybe_reexec_for_native_tk
+
+    maybe_reexec_for_native_tk()
+
+
+def test_import_path_points_at_kaiju_package():
+    from kaiju.gui.native_tk import _import_path
+
+    roots = _import_path().split(os.pathsep)
+    assert any((Path(root) / "kaiju").is_dir() for root in roots)
 
 
 def _flatten_names(nodes) -> set[str]:

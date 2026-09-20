@@ -96,7 +96,7 @@ kaiju gui examples                # the sample workspace in this repository
 
 ## Status
 
-v0: the CLI. Python 3.10+, stdlib only at runtime (plus `tomli` below 3.11), tests
+v0: the CLI. Python 3.10+, stdlib plus `tomli` at runtime, tests
 with pytest, lint with ruff. The code lives in [`src/`](src/README.md).
 
 Planned next: a local browser viewer (`kaiju serve`) with a filtered, paginated

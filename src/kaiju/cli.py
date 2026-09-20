@@ -184,6 +184,9 @@ def cmd_gui(args: argparse.Namespace, start: Path) -> int:
             target = start / target
     else:
         target = start
+    from kaiju.gui.native_tk import maybe_reexec_for_native_tk
+
+    maybe_reexec_for_native_tk()
     from kaiju.gui import run
 
     if not _detach_gui_child():

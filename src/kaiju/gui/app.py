@@ -10,7 +10,8 @@ from tkinter.scrolledtext import ScrolledText
 from kaiju import __version__
 from kaiju.cards import Card
 from kaiju.errors import KaijuError
-from kaiju.gui.recents import load_recents, remember_workspace
+from kaiju.gui.fonts import pick_mono_family, pick_ui_family
+from kaiju.gui.recents import remember_workspace, usable_recents
 from kaiju.gui.session import (
     CANONICAL,
     FILTER_ALL,
@@ -37,6 +38,7 @@ def run_app(start: Path) -> None:
         root = tk.Tk()
     except tk.TclError as exc:
         raise KaijuError(f"could not open display ({exc})") from exc
+    _configure_theme(root)
     _configure_fonts(root)
     App(root, start)
     root.mainloop()
@@ -217,7 +219,7 @@ class App:
 
     def _rebuild_recent_menu(self) -> None:
         self._recent_menu.delete(0, tk.END)
-        recents = load_recents()
+        recents = usable_recents()
         if not recents:
             self._recent_menu.add_command(label="(none)", state=tk.DISABLED)
             return
@@ -230,7 +232,7 @@ class App:
     def _fill_empty_recents(self) -> None:
         for child in self.empty_recents.winfo_children():
             child.destroy()
-        recents = load_recents()
+        recents = usable_recents()
         if not recents:
             return
         ttk.Label(self.empty_recents, text="Recent workspaces").pack(anchor="w")
@@ -618,16 +620,20 @@ def _select_all(event: tk.Event) -> str:
     return "break"
 
 
+def _configure_theme(root: tk.Tk) -> None:
+    style = ttk.Style(root)
+    available = {name.casefold(): name for name in style.theme_names()}
+    for name in ("clam", "alt", "default"):
+        actual = available.get(name)
+        if actual is not None:
+            style.theme_use(actual)
+            return
+
+
 def _configure_fonts(root: tk.Tk) -> None:
     families = set(tkfont.families(root))
-    ui = _first_family(
-        families,
-        ("DejaVu Sans", "Noto Sans", "Liberation Sans", "Ubuntu", "Cantarell", "Sans"),
-    )
-    mono = _first_family(
-        families,
-        ("DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Ubuntu Mono", "Monospace"),
-    )
+    ui = pick_ui_family(families)
+    mono = pick_mono_family(families)
     size = 10
     for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont"):
         try:
@@ -637,21 +643,11 @@ def _configure_fonts(root: tk.Tk) -> None:
     with contextlib.suppress(tk.TclError):
         tkfont.nametofont("TkFixedFont").configure(family=mono, size=size)
     style = ttk.Style(root)
-    rowheight = 24
-    style.configure(".", font=(ui, size))
-    style.configure("Treeview", font=(ui, size), rowheight=rowheight)
-    style.configure("Treeview.Heading", font=(ui, size))
-    style.configure("TLabel", font=(ui, size))
-    style.configure("TButton", font=(ui, size))
-
-
-def _first_family(families: set[str], wanted: tuple[str, ...]) -> str:
-    available = {name.casefold(): name for name in families}
-    for name in wanted:
-        match = available.get(name.casefold())
-        if match is not None:
-            return match
-    return wanted[-1]
+    style.configure(".", font="TkDefaultFont")
+    style.configure("Treeview", font="TkDefaultFont", rowheight=24)
+    style.configure("Treeview.Heading", font="TkHeadingFont")
+    style.configure("TLabel", font="TkDefaultFont")
+    style.configure("TButton", font="TkDefaultFont")
 
 
 def _set_text(widget: ScrolledText, content: str) -> None:
