@@ -8,7 +8,7 @@ from kaiju import __version__
 from kaiju.cards import Card
 from kaiju.errors import KaijuError
 from kaiju.gui.appearance import apply_appearance, show_preferences
-from kaiju.gui.prefs import Prefs, load_prefs, save_prefs
+from kaiju.gui.prefs import THEME_DARK, Prefs, load_prefs, save_prefs
 from kaiju.gui.recents import remember_workspace, usable_recents
 from kaiju.gui.session import (
     CANONICAL,
@@ -35,7 +35,7 @@ NAV_SASH = 220
 NAV_SASH_MIN = 140
 FILES_SASH = 220
 FILES_SASH_MIN = 140
-MENU_ICONS = ("open", "recent", "refresh", "exit", "info")
+MENU_ICONS = ("open", "recent", "refresh", "exit", "info", "wrench")
 
 
 def desired_nav_sash(current: int, pane_width: int) -> int | None:
@@ -79,7 +79,10 @@ class App:
         self._files_sash_wait = 0
         self._nav_sash_ready = False
         self._files_sash_ready = False
-        self._icons: dict[str, tk.PhotoImage] = {}
+        self._light_icons: dict[str, tk.PhotoImage] = {}
+        self._dark_icons: dict[str, tk.PhotoImage] = {}
+        self._icon_menu_items: list[tuple[tk.Menu, int, str]] = []
+        self._icon_buttons: list[tuple[ttk.Widget, str]] = []
         self._prefs_win: tk.Toplevel | None = None
         self.prefs = load_prefs()
         apply_appearance(self.root, self.prefs)
@@ -193,16 +196,51 @@ class App:
 
     def _load_icons(self) -> None:
         folder = Path(__file__).with_name("icons")
+        dark = folder / "dark"
         for name in MENU_ICONS:
             photo = _photo(folder / f"{name}.png")
             if photo is not None:
-                self._icons[name] = photo
+                self._light_icons[name] = photo
+            dark_photo = _photo(dark / f"{name}.png")
+            if dark_photo is not None:
+                self._dark_icons[name] = dark_photo
+
+    def _icon_image(self, name: str) -> tk.PhotoImage | None:
+        if self.prefs.theme == THEME_DARK:
+            photo = self._dark_icons.get(name)
+            if photo is not None:
+                return photo
+        return self._light_icons.get(name)
 
     def _icon_opts(self, name: str) -> dict[str, object]:
-        photo = self._icons.get(name)
+        photo = self._icon_image(name)
         if photo is None:
             return {}
         return {"image": photo, "compound": "left"}
+
+    def _remember_menu_icon(self, menu: tk.Menu, name: str) -> None:
+        self._icon_menu_items.append((menu, int(menu.index("end")), name))
+
+    def _remember_button_icon(self, button: ttk.Widget, name: str) -> None:
+        self._icon_buttons.append((button, name))
+
+    def _apply_icon_theme(self) -> None:
+        for menu, index, name in self._icon_menu_items:
+            photo = self._icon_image(name)
+            if photo is None:
+                continue
+            try:
+                menu.entryconfigure(index, image=photo)
+            except tk.TclError:
+                continue
+        for button, name in self._icon_buttons:
+            photo = self._icon_image(name)
+            if photo is None:
+                continue
+            try:
+                button.configure(image=photo)
+            except tk.TclError:
+                continue
 
     def _build_menu(self) -> None:
         menubar = tk.Menu(self.root)
@@ -213,18 +251,21 @@ class App:
             accelerator="Ctrl+O",
             **self._icon_opts("open"),
         )
+        self._remember_menu_icon(file_menu, "open")
         self._recent_menu = tk.Menu(file_menu, tearoff=0)
         file_menu.add_cascade(
             label="Recent Workspaces",
             menu=self._recent_menu,
             **self._icon_opts("recent"),
         )
+        self._remember_menu_icon(file_menu, "recent")
         file_menu.add_command(
             label="Refresh",
             command=self._refresh,
             accelerator="F5",
             **self._icon_opts("refresh"),
         )
+        self._remember_menu_icon(file_menu, "refresh")
         file_menu.add_separator()
         file_menu.add_command(
             label="Exit",
@@ -232,13 +273,16 @@ class App:
             accelerator="Ctrl+Q",
             **self._icon_opts("exit"),
         )
+        self._remember_menu_icon(file_menu, "exit")
         menubar.add_cascade(label="File", menu=file_menu)
         edit_menu = tk.Menu(menubar, tearoff=0)
         edit_menu.add_command(
             label="Preferences…",
             command=self._preferences,
             accelerator="Ctrl+,",
+            **self._icon_opts("wrench"),
         )
+        self._remember_menu_icon(edit_menu, "wrench")
         menubar.add_cascade(label="Edit", menu=edit_menu)
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(
@@ -246,6 +290,7 @@ class App:
             command=self._about,
             **self._icon_opts("info"),
         )
+        self._remember_menu_icon(help_menu, "info")
         menubar.add_cascade(label="Help", menu=help_menu)
         self._file_menu = file_menu
         self.root.config(menu=menubar)
@@ -253,12 +298,14 @@ class App:
     def _build_toolbar(self) -> None:
         bar = ttk.Frame(self.root, padding=(6, 4))
         bar.pack(side=tk.TOP, fill=tk.X)
-        ttk.Button(
+        open_btn = ttk.Button(
             bar,
             text="Open Workspace…",
             command=self._choose_workspace,
             **self._icon_opts("open"),
-        ).pack(side=tk.LEFT, padx=(0, 4))
+        )
+        open_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._remember_button_icon(open_btn, "open")
         self._refresh_btn = ttk.Button(
             bar,
             text="Refresh",
@@ -266,6 +313,7 @@ class App:
             **self._icon_opts("refresh"),
         )
         self._refresh_btn.pack(side=tk.LEFT)
+        self._remember_button_icon(self._refresh_btn, "refresh")
 
     def _build_empty(self) -> None:
         ttk.Label(
@@ -413,6 +461,7 @@ class App:
         self.prefs = prefs
         save_prefs(prefs)
         apply_appearance(self.root, prefs)
+        self._apply_icon_theme()
 
     def _about(self) -> None:
         win = tk.Toplevel(self.root)

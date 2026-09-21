@@ -291,6 +291,39 @@ def test_photo_loads_menu_icons():
         folder = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "icons"
         for name in MENU_ICONS:
             assert _photo(folder / f"{name}.png") is not None
+            assert _photo(folder / "dark" / f"{name}.png") is not None
+    finally:
+        root.destroy()
+
+
+def test_dark_menu_icons_are_white():
+    import tkinter as tk
+
+    import pytest
+
+    from kaiju.gui.app import MENU_ICONS, _photo
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no display")
+    root.withdraw()
+    try:
+        folder = Path(__file__).resolve().parents[1] / "kaiju" / "gui" / "icons" / "dark"
+        assert {path.stem for path in folder.glob("*.png")} == set(MENU_ICONS)
+        for name in MENU_ICONS:
+            path = folder / f"{name}.png"
+            assert path.stat().st_size < 2_000
+            photo = _photo(path)
+            assert photo is not None
+            saw_ink = False
+            for y in range(photo.height()):
+                for x in range(photo.width()):
+                    if photo.transparency_get(x, y):
+                        continue
+                    assert photo.get(x, y) == (255, 255, 255)
+                    saw_ink = True
+            assert saw_ink
     finally:
         root.destroy()
 
