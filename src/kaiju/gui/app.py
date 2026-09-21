@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import contextlib
 import tkinter as tk
-import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from tkinter.scrolledtext import ScrolledText
 
 from kaiju import __version__
 from kaiju.cards import Card
 from kaiju.errors import KaijuError
-from kaiju.gui.fonts import pick_mono_family, pick_ui_family
+from kaiju.gui.appearance import apply_appearance, show_preferences
+from kaiju.gui.prefs import Prefs, load_prefs, save_prefs
 from kaiju.gui.recents import remember_workspace, usable_recents
 from kaiju.gui.session import (
     CANONICAL,
@@ -62,8 +60,6 @@ def run_app(start: Path) -> None:
         root = tk.Tk()
     except tk.TclError as exc:
         raise KaijuError(f"could not open display ({exc})") from exc
-    _configure_theme(root)
-    _configure_fonts(root)
     App(root, start)
     root.mainloop()
 
@@ -73,8 +69,8 @@ class App:
         self.root = root
         self.session = Session()
         self._current_card: Card | None = None
-        self._texts: dict[str, ScrolledText] = {}
-        self._extra: tuple[tk.Misc, ScrolledText] | None = None
+        self._texts: dict[str, tk.Text] = {}
+        self._extra: tuple[tk.Misc, tk.Text] | None = None
         self._busy = False
         self._file_nodes: dict[str, FileNode] = {}
         self._placing_nav = False
@@ -84,7 +80,11 @@ class App:
         self._nav_sash_ready = False
         self._files_sash_ready = False
         self._icons: dict[str, tk.PhotoImage] = {}
+        self._prefs_win: tk.Toplevel | None = None
+        self.prefs = load_prefs()
+        apply_appearance(self.root, self.prefs)
         self._build()
+        apply_appearance(self.root, self.prefs)
         self._open_path(start, warn=False)
 
     def _build(self) -> None:
@@ -95,7 +95,7 @@ class App:
         self._load_icons()
         self._build_menu()
         self._build_toolbar()
-        self.status = ttk.Label(self.root, text="", anchor="w", padding=(8, 4), relief="sunken")
+        self.status = ttk.Label(self.root, text="", anchor="w", padding=(8, 4))
         self.status.pack(side=tk.BOTTOM, fill=tk.X)
 
         self.outer = ttk.Panedwindow(self.root, orient=tk.HORIZONTAL)
@@ -159,7 +159,6 @@ class App:
         for name in CANONICAL:
             frame = ttk.Frame(self.notebook)
             text = _make_text(frame)
-            text.pack(fill=tk.BOTH, expand=True)
             self.notebook.add(frame, text=name)
             self._texts[name] = text
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
@@ -190,6 +189,7 @@ class App:
         self.root.bind("<Control-o>", lambda _e: self._choose_workspace())
         self.root.bind("<F5>", lambda _e: self._refresh())
         self.root.bind("<Control-q>", lambda _e: self.root.destroy())
+        self.root.bind("<Control-comma>", lambda _e: self._preferences())
 
     def _load_icons(self) -> None:
         folder = Path(__file__).with_name("icons")
@@ -233,6 +233,13 @@ class App:
             **self._icon_opts("exit"),
         )
         menubar.add_cascade(label="File", menu=file_menu)
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(
+            label="Preferences…",
+            command=self._preferences,
+            accelerator="Ctrl+,",
+        )
+        menubar.add_cascade(label="Edit", menu=edit_menu)
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(
             label="About kAIju",
@@ -388,6 +395,24 @@ class App:
                 text=path.as_posix(),
                 command=lambda p=path: self._open_path(p, warn=True),
             ).pack(anchor="w", pady=(4, 0))
+
+    def _preferences(self) -> None:
+        if self._prefs_win is not None:
+            try:
+                if self._prefs_win.winfo_exists():
+                    self._prefs_win.lift()
+                    self._prefs_win.focus_set()
+                    return
+            except tk.TclError:
+                self._prefs_win = None
+        self._prefs_win = show_preferences(self.root, self.prefs, self._apply_prefs)
+
+    def _apply_prefs(self, prefs: Prefs) -> None:
+        if prefs == self.prefs:
+            return
+        self.prefs = prefs
+        save_prefs(prefs)
+        apply_appearance(self.root, prefs)
 
     def _about(self) -> None:
         win = tk.Toplevel(self.root)
@@ -649,11 +674,11 @@ class App:
             return
         frame = ttk.Frame(self.notebook)
         text = _make_text(frame)
-        text.pack(fill=tk.BOTH, expand=True)
         _set_text(text, preview.text)
         self.notebook.add(frame, text=title)
         self.notebook.select(frame)
         self._extra = (frame, text)
+        apply_appearance(self.root, self.prefs)
 
     def _clear_extra_tab(self) -> None:
         if self._extra is None:
@@ -705,21 +730,29 @@ class App:
         self.status.configure(text=text)
 
 
-def _make_text(parent: tk.Misc) -> ScrolledText:
-    widget = ScrolledText(
-        parent,
+def _make_text(parent: tk.Misc) -> tk.Text:
+    body = ttk.Frame(parent)
+    body.pack(fill=tk.BOTH, expand=True)
+    widget = tk.Text(
+        body,
         wrap="word",
         font="TkFixedFont",
         borderwidth=0,
         highlightthickness=0,
+        relief="flat",
         undo=False,
+        padx=4,
+        pady=4,
     )
+    scroll = ttk.Scrollbar(body, orient=tk.VERTICAL, command=widget.yview)
+    widget.configure(yscrollcommand=scroll.set)
     widget.bind("<Key>", _readonly_key)
     widget.bind("<<Paste>>", lambda _e: "break")
     widget.bind("<<Cut>>", lambda _e: "break")
     widget.bind("<<PasteSelection>>", lambda _e: "break")
     widget.bind("<Control-a>", _select_all)
     widget.bind("<Control-A>", _select_all)
+    _grid_with_yscroll(body, widget, scroll)
     return widget
 
 
@@ -761,12 +794,12 @@ def _select_all(event: tk.Event) -> str:
     return "break"
 
 
-def _grid_with_yscroll(parent: tk.Misc, tree: ttk.Treeview, scroll: ttk.Scrollbar) -> None:
+def _grid_with_yscroll(parent: tk.Misc, widget: tk.Misc, scroll: ttk.Scrollbar) -> None:
     """Keep the scrollbar visible when the parent shrinks (pack drops it)."""
     parent.grid_rowconfigure(0, weight=1)
     parent.grid_columnconfigure(0, weight=1)
     parent.grid_columnconfigure(1, weight=0)
-    tree.grid(row=0, column=0, sticky="nsew")
+    widget.grid(row=0, column=0, sticky="nsew")
     scroll.grid(row=0, column=1, sticky="ns")
 
 
@@ -787,36 +820,6 @@ def _apply_window_icon(root: tk.Tk) -> None:
     root._kaiju_icon = photo  # type: ignore[attr-defined]
 
 
-def _configure_theme(root: tk.Tk) -> None:
-    style = ttk.Style(root)
-    available = {name.casefold(): name for name in style.theme_names()}
-    for name in ("clam", "alt", "default"):
-        actual = available.get(name)
-        if actual is not None:
-            style.theme_use(actual)
-            return
-
-
-def _configure_fonts(root: tk.Tk) -> None:
-    families = set(tkfont.families(root))
-    ui = pick_ui_family(families)
-    mono = pick_mono_family(families)
-    size = 10
-    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont"):
-        try:
-            tkfont.nametofont(name).configure(family=ui, size=size)
-        except tk.TclError:
-            continue
-    with contextlib.suppress(tk.TclError):
-        tkfont.nametofont("TkFixedFont").configure(family=mono, size=size)
-    style = ttk.Style(root)
-    style.configure(".", font="TkDefaultFont")
-    style.configure("Treeview", font="TkDefaultFont", rowheight=24)
-    style.configure("Treeview.Heading", font="TkHeadingFont")
-    style.configure("TLabel", font="TkDefaultFont")
-    style.configure("TButton", font="TkDefaultFont")
-
-
-def _set_text(widget: ScrolledText, content: str) -> None:
+def _set_text(widget: tk.Text, content: str) -> None:
     widget.delete("1.0", "end")
     widget.insert("1.0", content)
