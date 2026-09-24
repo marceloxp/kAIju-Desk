@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kaiju.cards import Card, scan_cards, sort_cards
+from kaiju.cron import CronJob, scan_crons
 from kaiju.errors import KaijuError
 from kaiju.search import CANONICAL, HEAD_BYTES, MAX_FILE_BYTES
 from kaiju.workspace import Workspace, find_workspace
@@ -14,6 +15,7 @@ FILTER_CLOSED = "closed"
 FILTER_EPIC = "epic"
 FILTER_EPICS = "epics"
 FILTER_BACKLOG = "backlog"
+FILTER_CRONS = "crons"
 
 TABLE_COLUMNS = ("card", "title", "status", "epic", "parent", "created_at", "closed_at")
 TABLE_HEADINGS = {
@@ -24,6 +26,14 @@ TABLE_HEADINGS = {
     "parent": "Parent",
     "created_at": "Created",
     "closed_at": "Closed",
+}
+CRON_COLUMNS = ("card", "when", "title", "readable", "script")
+CRON_HEADINGS = {
+    "when": "When",
+    "title": "Title",
+    "readable": "Readable",
+    "script": "Script",
+    "card": "Card",
 }
 
 
@@ -57,6 +67,7 @@ class Session:
         self.filter_kind: str = FILTER_ALL
         self.epic_code: str = ""
         self._cards: list[Card] = []
+        self._crons: list[CronJob] = []
 
     def open(self, start: Path) -> bool:
         try:
@@ -64,12 +75,14 @@ class Session:
         except KaijuError as exc:
             self.workspace = None
             self._cards = []
+            self._crons = []
             self.error = str(exc)
             self.filter_kind = FILTER_ALL
             self.epic_code = ""
             return False
         self.workspace = ws
         self._cards = sort_cards(scan_cards(ws))
+        self._crons = scan_crons(ws)
         self.error = None
         self.filter_kind = FILTER_ALL
         self.epic_code = ""
@@ -79,6 +92,7 @@ class Session:
         if self.workspace is None:
             return
         self._cards = sort_cards(scan_cards(self.workspace))
+        self._crons = scan_crons(self.workspace)
         if (
             self.filter_kind == FILTER_EPIC
             and self.epic_code
@@ -100,7 +114,7 @@ class Session:
     def filtered_cards(self) -> list[Card]:
         cards = self._cards
         kind = self.filter_kind
-        if kind == FILTER_BACKLOG:
+        if kind in (FILTER_BACKLOG, FILTER_CRONS):
             return []
         if kind == FILTER_OPEN:
             return [card for card in cards if not card.is_closed]
@@ -111,6 +125,15 @@ class Session:
         if kind == FILTER_EPICS:
             return [card for card in cards if card.is_epic]
         return list(cards)
+
+    def crons(self) -> list[CronJob]:
+        return list(self._crons)
+
+    def cron_by_key(self, key: str) -> CronJob | None:
+        for job in self._crons:
+            if job.key == key:
+                return job
+        return None
 
     def card_by_code(self, code: str) -> Card | None:
         for card in self._cards:
@@ -140,6 +163,7 @@ class Session:
                 NavItem(key="closed", label="Closed", kind=FILTER_CLOSED),
                 NavItem(key="epics", label="Epics", kind=FILTER_EPICS, children=epics),
                 NavItem(key="backlog", label="Backlog", kind=FILTER_BACKLOG),
+                NavItem(key="crons", label="Crons", kind=FILTER_CRONS),
             ),
         )
 
@@ -147,6 +171,10 @@ class Session:
         if self.workspace is None:
             return None
         return self.workspace.root / "BACKLOG.md"
+
+
+def cron_values(job: CronJob) -> tuple[str, ...]:
+    return (job.card, job.when, job.title, job.readable, job.script)
 
 
 def table_values(card: Card) -> tuple[str, ...]:

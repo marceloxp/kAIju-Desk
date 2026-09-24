@@ -12,3 +12,4 @@ kaiju -C examples guide
 ```
 
 Local rule for this sample: keep attachments inside the card folder (see `MT-0001/sql/`).
+Scheduled jobs are in `cron/` (workspace) and `MT-0004/cron/` (card). Open Crons in `kaiju gui`.

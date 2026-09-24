@@ -93,7 +93,7 @@ def test_nav_tree_lists_epics(capsys, tmp_path, today):
     assert tree is not None
     assert tree.label == "maintenance"
     labels = [child.label for child in tree.children]
-    assert labels == ["All", "Open", "Closed", "Epics", "Backlog"]
+    assert labels == ["All", "Open", "Closed", "Epics", "Backlog", "Crons"]
     epics = tree.children[3].children
     assert len(epics) == 1
     assert epics[0].key == "epic:MT-0002"

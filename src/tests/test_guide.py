@@ -27,6 +27,10 @@ def test_guide_contents(capsys, tmp_path, today):
     assert "## Workspace rules (README.md)" in out
     assert "Only in this workspace." in out
     assert 'kaiju search "" --open' in out
+    assert "## Cron (`cron/`)" in out
+    assert "TELEGRAM_BOT_TOKEN" in out
+    assert "There is no command for them." in out
+    assert "`readable` is free text." in out
     assert "`close`/`reopen` without STATUS use `[on]`" in out
 
 

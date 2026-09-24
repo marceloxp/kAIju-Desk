@@ -139,6 +139,19 @@ def _hits_in_root(ws: Workspace, regex: re.Pattern[str]) -> list[Hit]:
                 title="",
             )
         )
+    cron_dir = ws.root / "cron"
+    if cron_dir.is_dir() and not cron_dir.is_symlink():
+        for path in _iter_files(cron_dir):
+            hits.extend(
+                _hits_in_file(
+                    path,
+                    regex,
+                    label="CRON",
+                    status="",
+                    relpath=path.relative_to(ws.root).as_posix(),
+                    title="",
+                )
+            )
     return hits
 
 

@@ -6,15 +6,19 @@ from tkinter import filedialog, messagebox, ttk
 
 from kaiju import __version__
 from kaiju.cards import Card
+from kaiju.cron import CronJob
 from kaiju.errors import KaijuError
 from kaiju.gui.appearance import apply_appearance, show_preferences
 from kaiju.gui.prefs import THEME_DARK, Prefs, load_prefs, save_prefs
 from kaiju.gui.recents import remember_workspace, usable_recents
 from kaiju.gui.session import (
     CANONICAL,
+    CRON_COLUMNS,
+    CRON_HEADINGS,
     FILTER_ALL,
     FILTER_BACKLOG,
     FILTER_CLOSED,
+    FILTER_CRONS,
     FILTER_EPIC,
     FILTER_EPICS,
     FILTER_OPEN,
@@ -25,7 +29,9 @@ from kaiju.gui.session import (
     Preview,
     Session,
     card_file_tree,
+    cron_values,
     is_canonical,
+    list_file_tree,
     read_preview,
     table_values,
 )
@@ -69,6 +75,7 @@ class App:
         self.root = root
         self.session = Session()
         self._current_card: Card | None = None
+        self._files_root: Path | None = None
         self._texts: dict[str, tk.Text] = {}
         self._extra: tuple[tk.Misc, tk.Text] | None = None
         self._busy = False
@@ -135,7 +142,7 @@ class App:
             show="headings",
             selectmode="browse",
         )
-        widths = {
+        self._card_widths = {
             "card": 90,
             "title": 280,
             "status": 100,
@@ -144,9 +151,14 @@ class App:
             "created_at": 100,
             "closed_at": 100,
         }
-        for col in TABLE_COLUMNS:
-            self.table.heading(col, text=TABLE_HEADINGS[col])
-            self.table.column(col, width=widths[col], stretch=(col == "title"))
+        self._cron_widths = {
+            "when": 120,
+            "title": 180,
+            "readable": 280,
+            "script": 140,
+            "card": 90,
+        }
+        self._apply_columns(TABLE_COLUMNS, TABLE_HEADINGS, self._card_widths)
         table_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.table.yview)
         self.table.configure(yscrollcommand=table_scroll.set)
         _grid_with_yscroll(table_frame, self.table, table_scroll)
@@ -520,6 +532,7 @@ class App:
         self._busy = True
         try:
             self._current_card = None
+            self._files_root = None
             self._clear_extra_tab()
             self._fill_nav()
             nav_key = self._nav_key()
@@ -533,6 +546,8 @@ class App:
             self.root.title(f"kAIju — {name}")
             if self.session.filter_kind == FILTER_BACKLOG:
                 self._show_backlog()
+            elif self.session.filter_kind == FILTER_CRONS:
+                self._show_cron_list(keep_card)
             else:
                 card_code = keep_card
                 if card_code is None:
@@ -555,6 +570,7 @@ class App:
             FILTER_CLOSED: "closed",
             FILTER_EPICS: "epics",
             FILTER_BACKLOG: "backlog",
+            FILTER_CRONS: "crons",
         }.get(kind, "all")
 
     def _fill_nav(self) -> None:
@@ -576,8 +592,25 @@ class App:
         for child in item.children:
             self._insert_nav(item.key, child, open_=(child.key == "epics"))
 
+    def _apply_columns(
+        self,
+        columns: tuple[str, ...],
+        headings: dict[str, str],
+        widths: dict[str, int],
+    ) -> None:
+        self.table.configure(columns=columns)
+        for col in columns:
+            self.table.heading(col, text=headings[col])
+            self.table.column(col, width=widths[col], stretch=(col in {"title", "readable"}))
+
     def _fill_table(self) -> None:
         self.table.delete(*self.table.get_children())
+        if self.session.filter_kind == FILTER_CRONS:
+            self._apply_columns(CRON_COLUMNS, CRON_HEADINGS, self._cron_widths)
+            for job in self.session.crons():
+                self.table.insert("", "end", iid=job.key, values=cron_values(job))
+            return
+        self._apply_columns(TABLE_COLUMNS, TABLE_HEADINGS, self._card_widths)
         for card in self.session.filtered_cards():
             self.table.insert("", "end", iid=card.code, values=table_values(card))
 
@@ -594,9 +627,12 @@ class App:
         try:
             self._fill_table()
             self._current_card = None
+            self._files_root = None
             self._clear_extra_tab()
             if kind == FILTER_BACKLOG:
                 self._show_backlog()
+            elif kind == FILTER_CRONS:
+                self._show_cron_list(None)
             else:
                 self._clear_preview()
                 self._clear_files()
@@ -615,6 +651,11 @@ class App:
             return
         code = self._selected_card_code()
         if not code:
+            return
+        if self.session.filter_kind == FILTER_CRONS:
+            job = self.session.cron_by_key(code)
+            if job is not None:
+                self._show_cron(job)
             return
         card = self.session.card_by_code(code)
         if card is None:
@@ -646,6 +687,46 @@ class App:
         self.notebook.select(0)
         self._set_status(self._card_status(card))
 
+    def _show_cron_list(self, keep_key: str | None) -> None:
+        self._clear_preview()
+        self._clear_files()
+        jobs = self.session.crons()
+        key = keep_key if keep_key and self.session.cron_by_key(keep_key) else None
+        if key is None and jobs:
+            key = jobs[0].key
+        if key:
+            self._select_cron(key)
+        else:
+            self._set_status(self._compose_status("Crons", ""))
+
+    def _select_cron(self, key: str) -> None:
+        if not self.table.exists(key):
+            return
+        self.table.selection_set(key)
+        self.table.focus(key)
+        self.table.see(key)
+        job = self.session.cron_by_key(key)
+        if job is not None:
+            self._show_cron(job)
+
+    def _show_cron(self, job: CronJob) -> None:
+        self._current_card = None
+        self._files_root = job.md_path.parent
+        self._clear_extra_tab()
+        for name in CANONICAL:
+            _set_text(self._texts[name], "")
+        self._fill_files_at(self._files_root)
+        preview = read_preview(job.md_path)
+        self._set_extra_tab(job.md_path.name, preview)
+        where = job.card or "workspace"
+        self._set_status(self._compose_status(f"Crons · {where}", preview.message))
+
+    def _fill_files_at(self, folder: Path) -> None:
+        self.files.delete(*self.files.get_children())
+        self._file_nodes = {}
+        root = FileNode(name=folder.name, relpath="", is_dir=True, children=list_file_tree(folder))
+        self._insert_file("", root, open_=True)
+
     def _show_backlog(self) -> None:
         self._clear_preview()
         self._clear_files()
@@ -676,7 +757,7 @@ class App:
         return iid
 
     def _on_file_select(self, _event=None) -> None:
-        if self._busy or self._current_card is None:
+        if self._busy:
             return
         sel = self.files.selection()
         if not sel:
@@ -685,6 +766,16 @@ class App:
         if node is None or node.is_dir:
             return
         relpath = node.relpath
+        if self._current_card is None:
+            if self._files_root is None:
+                return
+            preview = read_preview(self._files_root / relpath)
+            if preview.text == "" and preview.message:
+                self._set_status(self._compose_status("Crons", preview.message))
+                return
+            self._set_extra_tab(node.name, preview)
+            self._set_status(self._compose_status("Crons", preview.message))
+            return
         path = self._current_card.path / relpath
         if is_canonical(relpath):
             index = CANONICAL.index(relpath)

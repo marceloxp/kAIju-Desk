@@ -23,6 +23,8 @@ def test_example_workspace_is_a_valid_sample():
     assert (ws.root / "MT-0001" / "sql" / "explain.sql").is_file()
     assert (ws.root / "BACKLOG.md").is_file()
     assert (ws.root / "README.md").is_file()
+    assert (ws.root / "cron" / "queue-check.md").is_file()
+    assert (ws.root / "MT-0004" / "cron" / "daily-stand.md").is_file()
 
 
 def test_example_workspace_lists_via_cli(capsys):

@@ -71,7 +71,7 @@ kaiju gui examples                # the sample workspace in this repository
 | `add` | allocates the next code and scaffolds the card |
 | `status` / `close` / `reopen` | rewrite only the front-matter, never `MEMORY.md` or `DELIVERY.md` |
 | `search` | regex over the three files, the backlog and text attachments, paginated |
-| `gui` | local read-only viewer: cards in a table, the three files, attachments |
+| `gui` | local read-only viewer: cards in a table, the three files, attachments, and the cron list |
 
 `CARD` accepts the full code (`MT-0003`) or just the number (`3`).
 
@@ -88,6 +88,10 @@ kaiju gui examples                # the sample workspace in this repository
   the output and defaults to ten lines.
 - **Out of the pattern is invisible.** A folder that is not a card is ignored, not
   fixed.
+- **Cron lives in the folder.** A job is a `*.md` plus a script, in `cron/` at the
+  workspace root or in `CARD/cron/`. There is no command for it: the agent writes
+  the files and the crontab line. `kaiju gui` lists the jobs. The contract is
+  `kaiju guide`.
 
 ## How the agent finds it
 
