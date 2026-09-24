@@ -40,12 +40,17 @@ Typical *user* workspace (not this repo):
 ```text
 .ai/maintenance/
 ├── kaiju.toml
+├── .env                TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (gitignored; init does not create it)
 ├── README.md           workspace-specific rules (human writes; kaiju only reads)
 ├── BACKLOG.md          findings not yet cards (no CLI)
+├── cron/               workspace jobs (no CLI)
+│   ├── queue-check.md  front-matter: when, script, title, readable
+│   └── queue-check.sh  the script named by script:
 └── MT-0001/
     ├── README.md       request + record (front-matter)
     ├── MEMORY.md       trail: decisions, gotchas, dead ends
     ├── DELIVERY.md     what was done, result, left out
+    ├── cron/           jobs for this card (same shape as the workspace cron/)
     └── sql/explain.sql free attachments; never leave the card folder
 ```
 
@@ -54,6 +59,8 @@ Do not duplicate across the three files. Delivery ≠ README; trail ≠ DELIVERY
 **Card:** child dir whose `README.md` front-matter `card:` equals the folder name. **Closed:** `closed_at` filled (a date), regardless of status name. **Epic:** `epic` equals own code (`--as-epic`); others use `--epic`. No nested epics. **Parent:** independent decomposition.
 
 **Backlog:** never parsed, only searched. Suggested `## Open` / `## Dropped` with `###` findings. Mid-card discoveries go here; the current card does not grow. Become a card (`kaiju add`, cite `## Origin`) or move to Dropped with a reason.
+
+**Cron:** a job is one `*.md` plus the script beside it, in `cron/` at the workspace root or in `CARD/cron/`. No command: the agent writes the files and installs, comments, or removes the crontab line (absolute path to the script). The markdown front-matter is the record the GUI reads: `when` (five crontab fields; a one-shot date uses day and month), `script` (file name next to the markdown; any language, including `claude -p`), `title` (short list name), `readable` (free text: the intention in words; kaiju does not interpret it). `.env` at the workspace root holds `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; the script reads it; search skips the dot name. `kaiju gui` lists the jobs (Card, When, Title, Readable, Script) and does not read the crontab. Comparing the folders with `crontab -l` answers which jobs are installed. Sample: `examples/cron/` and `examples/MT-0004/cron/`.
 
 **Statuses:** `[status]` names; `[on]` maps `add`/`close`/`reopen` to a status (CLI STATUS on close/reopen still wins). Template: `open`, `in-progress`, `done`, `cancelled`. **Core fields:** `card`, `title`, `status`, `created_at`, `closed_at`, `epic`, `parent`. Extras from `[additional_fields]` (template: `category`, `branch`, `agent_resume`).
 
@@ -78,8 +85,8 @@ kaiju gui [DIR]
 - `guide` is the contract for the *using* agent (plus workspace README if present). Run it before changing cards.
 - `add` = max `PREFIX-NNNN` folder + 1 (prefix-matching folders count even if not cards). Duplicate titles: ignore case, accents, repeated whitespace; includes closed cards. Status from `[on].add`.
 - `status`/`close`/`reopen` patch front-matter only. Never touch MEMORY, DELIVERY, or README body. `close` sets `closed_at` to today and, without STATUS, `[on].close`; a second close keeps the original date and does not reapply `[on].close`. `reopen` with no STATUS → `[on].reopen`.
-- `search` over the three files, text attachments, and (unless a card filter is on) BACKLOG + workspace README. Skip >1 MiB, binaries (NUL in first 8 KiB), hidden names, directory symlinks. Empty regex + filters = listing.
-- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Tkinter is imported only on this path. On Linux, if the current interpreter's Tk has no Xft (typical of uv-managed CPython), the GUI re-execs a system Python so fonts anti-alias.
+- `search` over the three files, text attachments, workspace `cron/`, and (unless a card filter is on) BACKLOG + workspace README. Card `cron/` is an attachment. Skip >1 MiB, binaries (NUL in first 8 KiB), hidden names, directory symlinks. Empty regex + filters = listing.
+- `gui` opens a local Tk viewer (read-only). Discovers the workspace like other commands; without one, the window opens empty. Nav includes Crons: the list comes from the `cron/` folders, not from the crontab. Tkinter is imported only on this path. On Linux, if the current interpreter's Tk has no Xft (typical of uv-managed CPython), the GUI re-execs a system Python so fonts anti-alias.
 
 Exit: `0` success (including empty search), `1` `KaijuError`, `2` argparse. Predicted failures: `error: …` on stderr, no traceback.
 
@@ -87,14 +94,15 @@ Exit: `0` success (including empty search), `1` `KaijuError`, `2` argparse. Pred
 
 Entry: `kaiju.cli:main`. Version in `kaiju/__init__.py`.
 
-**Layering:** `workspace`, `frontmatter`, `cards`, `search`, `guide` never print and never `sys.exit`. Return data or raise `KaijuError`. Only `cli.py` prints.
+**Layering:** `workspace`, `frontmatter`, `cards`, `cron`, `search`, `guide` never print and never `sys.exit`. Return data or raise `KaijuError`. Only `cli.py` prints.
 
 | Module                      | Owns                                                                        |
 | --------------------------- | --------------------------------------------------------------------------- |
 | `workspace.py`              | Config (incl. `[on]`), discovery, init, `today()`, `atomic_write`  |
 | `frontmatter.py`            | parse (`key: value`, skip blank/`#`, first key wins); `set_fields` in place |
 | `cards.py`                  | scan, numbering, add/status/close/reopen                                    |
-| `search.py`                 | filters, regex hits, snippets, `--cards`                                    |
+| `cron.py`                   | scan `cron/*.md` (workspace and card); front-matter only                    |
+| `search.py`                 | filters, regex hits, snippets, `--cards`, workspace `cron/`                 |
 | `guide.py` / `templates.py` | contract text and scaffolds                                                 |
 | `gui/`                      | Tk viewer (read-only); tkinter imported only when `kaiju gui` runs          |
 
